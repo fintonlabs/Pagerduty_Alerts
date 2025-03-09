@@ -1,112 +1,108 @@
 import requests
+import json
 from typing import Dict, Any, List
-from requests.models import PreparedRequest
-from requests.exceptions import HTTPError
 
-class IncidentFetcher:
+class IncidentProcessor:
     """
-    A class used to fetch incidents from a RESTful API.
-
-    ...
+    A class used to interact with a RESTful API to retrieve and process incidents and alerts.
 
     Attributes
     ----------
     base_url : str
-        the base URL for the API
+        The base URL for the API.
     token : str
-        the OAuth 2.0 token for API authentication
-    incident_limit : int
-        the maximum number of incidents to fetch
+        The bearer token for API authentication.
+    incidents_limit : int
+        The maximum number of incidents to retrieve.
 
     Methods
     -------
-    fetch_incidents():
-        Fetches incidents from the API.
+    get_incidents(page: int, size: int) -> Dict[str, Any]:
+        Retrieves a page of incidents from the API.
+    get_alerts(incident_id: str) -> Dict[str, Any]:
+        Retrieves the alerts for a specific incident from the API.
+    process_incidents():
+        Retrieves and processes all incidents and their related alerts.
     """
 
-    def __init__(self, base_url: str, token: str, incident_limit: int = 500):
+    def __init__(self, base_url: str, token: str, incidents_limit: int = 500):
         """
+        Constructs all the necessary attributes for the IncidentProcessor object.
+
         Parameters
         ----------
         base_url : str
             The base URL for the API.
         token : str
-            The OAuth 2.0 token for API authentication.
-        incident_limit : int, optional
-            The maximum number of incidents to fetch (default is 500).
+            The bearer token for API authentication.
+        incidents_limit : int, optional
+            The maximum number of incidents to retrieve (default is 500).
         """
-
         self.base_url = base_url
         self.token = token
-        self.incident_limit = incident_limit
+        self.incidents_limit = incidents_limit
 
-    def fetch_incidents(self) -> List[Dict[str, Any]]:
+    def get_incidents(self, page: int, size: int) -> Dict[str, Any]:
         """
-        Fetches incidents from the API.
-
-        Returns
-        -------
-        list
-            A list of incidents.
-        """
-
-        incidents = []
-        page = 0
-        size = min(500, self.incident_limit)  # API's maximum size is 500
-
-        while len(incidents) < self.incident_limit:
-            response = self._send_request(page, size)
-            incidents.extend(response.json())
-            page += 1
-
-        return incidents[:self.incident_limit]
-
-    def _send_request(self, page: int, size: int) -> PreparedRequest:
-        """
-        Sends a GET request to the API.
+        Retrieves a page of incidents from the API.
 
         Parameters
         ----------
         page : int
-            The page number.
+            The page number to retrieve.
         size : int
             The number of incidents per page.
 
         Returns
         -------
-        PreparedRequest
-            The response from the API.
+        dict
+            The JSON response from the API.
         """
-
-        headers = {'Authorization': f'Bearer {self.token}'}
-        params = {'page': page, 'size': size}
-        url = f'{self.base_url}/incidents'
-
-        response = requests.get(url, headers=headers, params=params)
-
-        # If the response was unsuccessful, raise an HTTPError
+        url = f"{self.base_url}/api/v1/incidents?page={page}&size={size}"
+        headers = {"Authorization": f"Bearer {self.token}"}
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
+        return response.json()
 
-        return response
+    def get_alerts(self, incident_id: str) -> Dict[str, Any]:
+        """
+        Retrieves the alerts for a specific incident from the API.
 
-def print_incidents(incidents: List[Dict[str, Any]]) -> None:
-    """
-    Prints incidents to the console.
+        Parameters
+        ----------
+        incident_id : str
+            The ID of the incident.
 
-    Parameters
-    ----------
-    incidents : list
-        A list of incidents.
-    """
+        Returns
+        -------
+        dict
+            The JSON response from the API.
+        """
+        url = f"{self.base_url}/api/v1/alerts/{incident_id}"
+        headers = {"Authorization": f"Bearer {self.token}"}
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
 
-    for incident in incidents:
-        print(f'ID: {incident["id"]}')
-        print(f'Alert Content: {incident["alertContent"]}')
-        print(f'Source Data: {incident["sourceData"]}')
-        print()
+    def process_incidents(self):
+        """
+        Retrieves and processes all incidents and their related alerts.
+
+        For each incident, the alerts are retrieved and the alert content and source data are printed to the console.
+        """
+        page = 1
+        size = self.incidents_limit
+        while True:
+            incidents = self.get_incidents(page, size)
+            if not incidents:
+                break
+            for incident in incidents:
+                alerts = self.get_alerts(incident["id"])
+                for alert in alerts:
+                    print(f"Alert Content: {alert['content']}, Source Data: {alert['sourceData']}")
+            page += 1
+
 
 # Example usage:
-if __name__ == "__main__":
-    fetcher = IncidentFetcher('https://api.example.com', 'your_token', 1000)
-    incidents = fetcher.fetch_incidents()
-    print_incidents(incidents)
+processor = IncidentProcessor("https://api.example.com", "your_token")
+processor.process_incidents()
